@@ -1,0 +1,23 @@
+{
+  "name": "brag-cli",
+  "version": "1.0.0",
+  "description": "Auto brag document generator from git commits — saves to Obsidian and publishes to GitHub",
+  "bin": {
+    "brag": "./bin/brag.js"
+  },
+  "main": "./lib/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bin/brag.js"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["brag", "document", "git", "obsidian", "jira"],
+  "author": "tumusx",
+  "license": "MIT"
+}
