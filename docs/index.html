@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>brag-cli — Auto brag document generator</title>
+  <meta name="description" content="Automatically generate brag documents from your git commits. Reads Jira tickets, saves to Obsidian, publishes to GitHub." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --bg2: #161b22;
+      --bg3: #21262d;
+      --border: #30363d;
+      --green: #3fb950;
+      --green-dim: #1a4a28;
+      --blue: #58a6ff;
+      --purple: #bc8cff;
+      --orange: #ffa657;
+      --text: #e6edf3;
+      --text-dim: #8b949e;
+      --text-dimmer: #484f58;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* ── Nav ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(13, 17, 23, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-logo {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .nav-logo span { color: var(--green); }
+
+    nav ul {
+      list-style: none;
+      display: flex;
+      gap: 1.5rem;
+    }
+
+    nav a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: .9rem;
+      transition: color .2s;
+    }
+
+    nav a:hover { color: var(--text); }
+
+    .nav-gh {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .35rem .75rem;
+      font-size: .85rem;
+      color: var(--text) !important;
+    }
+
+    .nav-gh:hover { background: var(--border) !important; }
+
+    /* ── Hero ── */
+    .hero {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 6rem 2rem 4rem;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      background: var(--green-dim);
+      border: 1px solid var(--green);
+      border-radius: 999px;
+      padding: .25rem .9rem;
+      font-size: .8rem;
+      color: var(--green);
+      margin-bottom: 1.5rem;
+    }
+
+    .badge::before { content: "●"; font-size: .5rem; }
+
+    h1 {
+      font-size: clamp(2.4rem, 6vw, 3.6rem);
+      font-weight: 800;
+      letter-spacing: -.03em;
+      line-height: 1.1;
+      margin-bottom: 1.25rem;
+    }
+
+    h1 .accent { color: var(--green); }
+
+    .hero-sub {
+      font-size: 1.2rem;
+      color: var(--text-dim);
+      max-width: 560px;
+      margin: 0 auto 2.5rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 3.5rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .65rem 1.5rem;
+      border-radius: 8px;
+      font-size: .95rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: opacity .2s, transform .15s;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn:hover { opacity: .88; transform: translateY(-1px); }
+    .btn-primary { background: var(--green); color: #0d1117; }
+    .btn-secondary { background: var(--bg3); color: var(--text); border: 1px solid var(--border); }
+
+    /* ── Terminal demo ── */
+    .terminal {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      text-align: left;
+      max-width: 680px;
+      margin: 0 auto;
+      box-shadow: 0 24px 64px rgba(0,0,0,.5);
+    }
+
+    .terminal-bar {
+      background: var(--bg3);
+      padding: .75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-red { background: #ff5f57; }
+    .dot-yellow { background: #febc2e; }
+    .dot-green { background: #28c840; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: .8rem;
+      color: var(--text-dimmer);
+    }
+
+    .terminal-body {
+      padding: 1.25rem 1.5rem;
+      font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+      font-size: .85rem;
+      line-height: 1.8;
+    }
+
+    .t-prompt { color: var(--text-dimmer); }
+    .t-cmd { color: var(--text); }
+    .t-blue { color: var(--blue); }
+    .t-green { color: var(--green); }
+    .t-purple { color: var(--purple); }
+    .t-orange { color: var(--orange); }
+    .t-dim { color: var(--text-dim); }
+    .t-dimmer { color: var(--text-dimmer); }
+
+    /* ── How it works ── */
+    section { padding: 5rem 2rem; }
+
+    .section-inner { max-width: 960px; margin: 0 auto; }
+
+    .section-label {
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: .75rem;
+    }
+
+    h2 {
+      font-size: clamp(1.6rem, 3.5vw, 2.2rem);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      margin-bottom: 1rem;
+    }
+
+    .section-sub {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 520px;
+      margin-bottom: 3rem;
+    }
+
+    /* Steps */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .step {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      position: relative;
+      transition: border-color .2s;
+    }
+
+    .step:hover { border-color: var(--green); }
+
+    .step-num {
+      width: 32px;
+      height: 32px;
+      background: var(--green-dim);
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .85rem;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 1rem;
+    }
+
+    .step h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: .5rem;
+    }
+
+    .step p { font-size: .9rem; color: var(--text-dim); }
+
+    /* Integrations */
+    .integrations {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .integration {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem;
+      transition: border-color .2s, transform .2s;
+    }
+
+    .integration:hover { border-color: var(--blue); transform: translateY(-3px); }
+
+    .int-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+
+    .integration h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: .5rem; }
+    .integration p { font-size: .875rem; color: var(--text-dim); line-height: 1.6; }
+
+    .tag {
+      display: inline-block;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: .1rem .5rem;
+      font-size: .75rem;
+      color: var(--text-dim);
+      margin-top: .75rem;
+    }
+
+    /* Install */
+    .install-box {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2.5rem;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    @media (max-width: 640px) {
+      .install-box { grid-template-columns: 1fr; }
+    }
+
+    .install-box h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; color: var(--text-dim); }
+
+    .code-block {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+      font-size: .82rem;
+      line-height: 2;
+    }
+
+    .code-block .c-comment { color: var(--text-dimmer); }
+    .code-block .c-cmd { color: var(--green); }
+    .code-block .c-flag { color: var(--blue); }
+    .code-block .c-val { color: var(--orange); }
+
+    /* Sample doc */
+    .doc-preview {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .doc-header {
+      background: var(--bg3);
+      padding: .75rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      border-bottom: 1px solid var(--border);
+      font-size: .82rem;
+      color: var(--text-dim);
+    }
+
+    .doc-header-icon { font-size: 1rem; }
+
+    .doc-body {
+      padding: 1.5rem;
+      font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+      font-size: .78rem;
+      line-height: 1.9;
+      white-space: pre;
+      overflow-x: auto;
+    }
+
+    .md-frontmatter { color: var(--text-dimmer); }
+    .md-h1 { color: var(--blue); font-weight: bold; }
+    .md-h2 { color: var(--purple); font-weight: bold; }
+    .md-h3 { color: var(--orange); }
+    .md-bold { color: var(--green); }
+    .md-link { color: var(--blue); text-decoration: underline; }
+    .md-dim { color: var(--text-dimmer); }
+    .md-text { color: var(--text-dim); }
+
+    /* Divider */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    /* Footer */
+    footer {
+      padding: 2.5rem 2rem;
+      text-align: center;
+      color: var(--text-dimmer);
+      font-size: .85rem;
+      border-top: 1px solid var(--border);
+    }
+
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+  </style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <a class="nav-logo" href="#"><span>◆</span> brag-cli</a>
+  <ul>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#integrations">Integrations</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="https://github.com/tumusx/brag-cli" class="nav-gh" target="_blank">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      GitHub
+    </a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="badge">v1.0.0 — now with Jira integration</div>
+
+  <h1>
+    Brag documents,<br/>
+    <span class="accent">automatically.</span>
+  </h1>
+
+  <p class="hero-sub">
+    Every commit you make is a delivery worth documenting.
+    brag-cli reads your Jira ticket, captures git stats, and writes a structured brag document to Obsidian — automatically.
+  </p>
+
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="#install">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="21" x2="12" y2="3"/></svg>
+      Get started
+    </a>
+    <a class="btn btn-secondary" href="https://github.com/tumusx/brag-cli" target="_blank">
+      View on GitHub →
+    </a>
+  </div>
+
+  <!-- Terminal -->
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <span class="terminal-title">brag-cli demo</span>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$ </span><span class="t-cmd">git checkout -b feature/PAY-421-payment-retry</span></div>
+      <div><span class="t-prompt">$ </span><span class="t-cmd">git commit -m "feat: retry payment on timeout"</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-blue">◆ brag</span></div>
+      <div>  Ticket  <span class="t-green">PAY-421</span> <span class="t-dim">— Add payment retry logic</span></div>
+      <div>  Branch  <span class="t-dimmer">feature/PAY-421-payment-retry</span></div>
+      <div>  Commit  <span class="t-dimmer">a1b2c3d4</span> feat: retry payment on timeout</div>
+      <div>  Stats   <span class="t-green">+112</span> <span class="t-dimmer">adições</span> <span class="t-orange">-18</span> <span class="t-dimmer">remoções · 4 arquivo(s)</span></div>
+      <div>  Status  <span class="t-purple">In Progress</span> <span class="t-dimmer">· Story · High</span></div>
+      <div>&nbsp;</div>
+      <div><span class="t-green">✓ Salvo no Obsidian</span> <span class="t-dimmer">→ ~/mind/brag/PAY-421.md</span></div>
+      <div><span class="t-green">✓ Publicado no GitHub</span> <span class="t-dimmer">→ github.com/tumusx/brag-docs/...</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- How it works -->
+<section id="how">
+  <div class="section-inner">
+    <div class="section-label">How it works</div>
+    <h2>Commit → Document, in seconds.</h2>
+    <p class="section-sub">Install the post-commit hook once and forget about it. Your brag document grows automatically with every delivery.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Name your branch</h3>
+        <p>Use a Jira ticket in the branch name — <code>feature/ABC-123-description</code>. That's all the setup needed.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Commit normally</h3>
+        <p>The post-commit hook fires on every <code>git commit</code>. No extra commands, no interruptions to your flow.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Jira data is fetched</h3>
+        <p>brag-cli reads the ticket from the Jira API — summary, status, type, priority, story points, description.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3>Obsidian doc is updated</h3>
+        <p>A structured markdown file is created or updated in your vault. One file per ticket, with a new entry for each commit.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <h3>Pushed to GitHub</h3>
+        <p>The document is published to a GitHub repo, keeping a versioned, shareable history of your deliveries.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- Integrations -->
+<section id="integrations">
+  <div class="section-inner">
+    <div class="section-label">Integrations</div>
+    <h2>Three tools. One workflow.</h2>
+    <p class="section-sub">brag-cli connects the tools you already use.</p>
+
+    <div class="integrations">
+      <div class="integration">
+        <span class="int-icon">⚡</span>
+        <h3>Git</h3>
+        <p>Reads commit hash, message, author, diff stats, and changed files. Installs a <code>post-commit</code> hook to automate everything.</p>
+        <span class="tag">post-commit hook</span>
+      </div>
+      <div class="integration">
+        <span class="int-icon">🔷</span>
+        <h3>Jira</h3>
+        <p>Fetches ticket metadata via REST API v3 — summary, status, type, priority, story points, labels, and description.</p>
+        <span class="tag">REST API v3</span>
+      </div>
+      <div class="integration">
+        <span class="int-icon">🟣</span>
+        <h3>Obsidian</h3>
+        <p>Creates and updates structured markdown files with YAML frontmatter in your vault. Prepends a new entry on each commit.</p>
+        <span class="tag">YAML frontmatter</span>
+      </div>
+      <div class="integration">
+        <span class="int-icon">🐙</span>
+        <h3>GitHub</h3>
+        <p>Publishes documents to a GitHub repo via the Contents API. Creates the repo automatically if it doesn't exist.</p>
+        <span class="tag">GitHub API v3</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- Sample doc -->
+<section>
+  <div class="section-inner">
+    <div class="section-label">Output</div>
+    <h2>What the document looks like.</h2>
+    <p class="section-sub">A rich, structured markdown file — ready for performance reviews, team updates, or portfolio entries.</p>
+
+    <div class="doc-preview">
+      <div class="doc-header">
+        <span class="doc-header-icon">📄</span>
+        PAY-421.md — Obsidian vault
+      </div>
+      <div class="doc-body"><span class="md-frontmatter">---
+ticket: PAY-421
+last_updated: 2026-04-26
+summary: "Add payment retry logic for timeout scenarios"
+status: In Progress
+type: Story
+tags: [brag, engenharia, jira]
+---</span>
+
+<span class="md-h1"># PAY-421 — Add payment retry logic for timeout scenarios</span>
+
+<span class="md-text">> Registro automático de entregas de valor por ticket Jira.</span>
+
+<span class="md-h2">## Commits</span>
+
+<span class="md-h3">### `a1b2c3d4` · 2026-04-26 · feat: retry payment on timeout</span>
+
+<span class="md-text">| Campo        | Valor                               |
+|--------------|-------------------------------------|
+| Repositório  | `payments-service`                  |
+| Branch       | `feature/PAY-421-payment-retry`     |
+| Autor        | Murillo Alvares                     |
+| Ticket       | </span><span class="md-link">[PAY-421](https://empresa.atlassian.net/browse/PAY-421)</span><span class="md-text"> |</span>
+
+<span class="md-bold">**Impacto:** +112 adições · -18 remoções · 4 arquivo(s)</span>
+
+<span class="md-bold">**Jira — PAY-421**</span>
+
+<span class="md-text">| Campo      | Valor                                      |
+|------------|--------------------------------------------|
+| Título     | Add payment retry logic for timeout scenarios |
+| Tipo       | Story · **5 pts**                          |
+| Status     | In Progress                                |
+| Prioridade | High                                       |
+| Assignee   | Murillo Alvares                            |</span>
+
+<span class="md-dim">---</span></div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- Install -->
+<section id="install">
+  <div class="section-inner">
+    <div class="section-label">Install</div>
+    <h2>Up and running in 2 minutes.</h2>
+    <p class="section-sub">Node.js 18+ required.</p>
+
+    <div class="install-box">
+      <div>
+        <h3>Install &amp; configure</h3>
+        <div class="code-block">
+<span class="c-comment"># Install globally</span>
+<span class="c-cmd">npm install -g brag-cli</span>
+
+<span class="c-comment"># Configure Jira</span>
+<span class="c-cmd">brag config</span> \
+  <span class="c-flag">--jira-url</span> <span class="c-val">https://co.atlassian.net</span> \
+  <span class="c-flag">--jira-email</span> <span class="c-val">you@company.com</span> \
+  <span class="c-flag">--jira-token</span> <span class="c-val">YOUR_TOKEN</span>
+
+<span class="c-comment"># Configure Obsidian</span>
+<span class="c-cmd">brag config</span> \
+  <span class="c-flag">--obsidian</span> <span class="c-val">~/mind/brag</span>
+
+<span class="c-comment"># Optional: GitHub publishing</span>
+<span class="c-cmd">brag config</span> <span class="c-flag">--token</span> <span class="c-val">GITHUB_TOKEN</span>
+        </div>
+      </div>
+      <div>
+        <h3>Enable the hook</h3>
+        <div class="code-block">
+<span class="c-comment"># Install post-commit hook</span>
+<span class="c-cmd">cd</span> your-project
+<span class="c-cmd">brag hook install</span>
+
+<span class="c-comment"># That's it — commit as usual</span>
+<span class="c-cmd">git commit -m</span> <span class="c-val">"feat: ..."</span>
+
+<span class="c-comment"># Or log manually</span>
+<span class="c-cmd">brag log</span>
+<span class="c-cmd">brag log --push</span>
+
+<span class="c-comment"># Check saved docs</span>
+<span class="c-cmd">brag status</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  Built by <a href="https://github.com/tumusx" target="_blank">tumusx</a> ·
+  <a href="https://github.com/tumusx/brag-cli" target="_blank">GitHub</a> ·
+  MIT License
+</footer>
+
+</body>
+</html>
