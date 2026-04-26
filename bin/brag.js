@@ -4,23 +4,24 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { loadConfig, saveConfig, getConfigPath } from '../lib/config.js';
 import { getCurrentBranch, getLastCommit, extractTicket, isGitRepo } from '../lib/git.js';
-import { saveToObsidian } from '../lib/obsidian.js';
 import { publishBragDoc } from '../lib/github.js';
 import { installHook, removeHook } from '../lib/hook.js';
 import { fetchTicket } from '../lib/jira.js';
+import { saveBragDoc, listBragDocs, findTicketFile } from '../lib/storage.js';
+import { runGoogleOAuth } from '../lib/googledocs.js';
 
 const program = new Command();
 
 program
   .name('brag')
-  .description('Registra entregas de valor por commit → Obsidian + GitHub')
+  .description('Registra entregas de valor por commit → Obsidian ou Google Docs')
   .version('1.0.0');
 
 // ─── brag log ────────────────────────────────────────────────────────────────
 program
   .command('log')
   .description('Registra o último commit como entrada de brag document')
-  .option('--push', 'Publica no GitHub após salvar no Obsidian')
+  .option('--push', 'Publica no GitHub após salvar (apenas backend Obsidian)')
   .option('--cwd <path>', 'Diretório do repositório', process.cwd())
   .action(async (opts) => {
     try {
@@ -40,7 +41,6 @@ program
 
       const commit = getLastCommit(opts.cwd);
 
-      // Fetch Jira ticket data if configured
       let jiraTicket = null;
       if (config.jiraBaseUrl && config.jiraEmail && config.jiraToken) {
         try {
@@ -50,7 +50,11 @@ program
         }
       }
 
-      console.log(chalk.blue(`\n◆ brag`));
+      const backendLabel = config.storageBackend === 'googledocs'
+        ? chalk.blue('Google Docs')
+        : chalk.blue('Obsidian');
+
+      console.log(chalk.blue(`\n◆ brag`) + chalk.gray(` [${config.storageBackend}]`));
       console.log(`  Ticket  ${chalk.cyan(ticket)}${jiraTicket ? chalk.gray(` — ${jiraTicket.summary}`) : ''}`);
       console.log(`  Branch  ${chalk.gray(branch)}`);
       console.log(`  Commit  ${chalk.gray(commit.short)} ${commit.message}`);
@@ -60,15 +64,20 @@ program
       }
       console.log();
 
-      const filePath = saveToObsidian(config.obsidianPath, ticket, branch, commit, jiraTicket);
-      console.log(chalk.green(`✓ Salvo no Obsidian`) + chalk.gray(` → ${filePath}`));
+      const result = await saveBragDoc(config, ticket, branch, commit, jiraTicket);
+      console.log(chalk.green(`✓ Salvo em ${backendLabel}`) + chalk.gray(` → ${result}`));
 
       if (opts.push) {
-        try {
-          const url = await publishBragDoc(config, ticket, filePath);
-          console.log(chalk.green(`✓ Publicado no GitHub`) + chalk.gray(` → ${url}`));
-        } catch (err) {
-          console.error(chalk.red(`✗ GitHub: ${err.message}`));
+        if (config.storageBackend === 'googledocs') {
+          console.log(chalk.yellow(`⚠ --push é para GitHub e só funciona com o backend Obsidian.`));
+        } else {
+          try {
+            const filePath = result;
+            const url = await publishBragDoc(config, ticket, filePath);
+            console.log(chalk.green(`✓ Publicado no GitHub`) + chalk.gray(` → ${url}`));
+          } catch (err) {
+            console.error(chalk.red(`✗ GitHub: ${err.message}`));
+          }
         }
       }
     } catch (err) {
@@ -80,16 +89,19 @@ program
 // ─── brag push ───────────────────────────────────────────────────────────────
 program
   .command('push <ticket>')
-  .description('Publica manualmente o brag document de um ticket no GitHub')
+  .description('Publica manualmente o brag document de um ticket no GitHub (apenas Obsidian)')
   .action(async (ticket) => {
     try {
       const config = loadConfig();
-      const { join } = await import('path');
-      const filePath = join(config.obsidianPath, `${ticket}.md`);
 
-      const { existsSync } = await import('fs');
-      if (!existsSync(filePath)) {
-        console.error(chalk.red(`✗ Arquivo não encontrado: ${filePath}`));
+      if (config.storageBackend === 'googledocs') {
+        console.log(chalk.yellow(`⚠ Backend Google Docs: o documento já está no Google Drive.`));
+        process.exit(0);
+      }
+
+      const filePath = findTicketFile(config, ticket);
+      if (!filePath) {
+        console.error(chalk.red(`✗ Arquivo não encontrado para o ticket: ${ticket}`));
         process.exit(1);
       }
 
@@ -97,6 +109,27 @@ program
       console.log(chalk.green(`✓ Publicado`) + ` → ${url}`);
     } catch (err) {
       console.error(chalk.red(`✗ ${err.message}`));
+      process.exit(1);
+    }
+  });
+
+// ─── brag auth ───────────────────────────────────────────────────────────────
+const auth = program.command('auth').description('Autenticação com serviços externos');
+
+auth
+  .command('google')
+  .description('Autoriza o brag-cli a acessar o Google Drive e Google Docs')
+  .action(async () => {
+    try {
+      const config = loadConfig();
+      const tokens = await runGoogleOAuth(config);
+      saveConfig({ googleRefreshToken: tokens.refresh_token });
+      console.log(chalk.green('\n✓ Google autorizado com sucesso!'));
+      console.log(chalk.gray('  Refresh token salvo em ~/.brag/config.json'));
+      console.log(chalk.gray('\n  Agora configure o backend:'));
+      console.log(chalk.cyan('  brag config --storage googledocs'));
+    } catch (err) {
+      console.error(chalk.red(`\n✗ ${err.message}`));
       process.exit(1);
     }
   });
@@ -139,30 +172,60 @@ hook
 program
   .command('config')
   .description('Configura o brag-cli')
+  .option('--storage <backend>', 'Backend de armazenamento: obsidian | googledocs')
+  .option('--folder-structure <type>', 'Organização de pastas: flat | semester | year')
   .option('--token <token>', 'GitHub Personal Access Token')
-  .option('--owner <owner>', 'GitHub username/org (padrão: tumusx)')
-  .option('--repo <repo>', 'Nome do repositório GitHub (padrão: brag-docs)')
+  .option('--owner <owner>', 'GitHub username/org')
+  .option('--repo <repo>', 'Nome do repositório GitHub')
   .option('--obsidian <path>', 'Caminho da pasta brag no Obsidian')
   .option('--jira-url <url>', 'URL base do Jira (ex: https://empresa.atlassian.net)')
   .option('--jira-email <email>', 'Email da conta Jira')
   .option('--jira-token <token>', 'Jira API Token')
+  .option('--google-client-id <id>', 'Google OAuth Client ID')
+  .option('--google-client-secret <secret>', 'Google OAuth Client Secret')
   .option('--show', 'Mostra a configuração atual')
   .action((opts) => {
     const config = loadConfig();
 
     if (opts.show) {
+      const folderInfo = config.folderStructure === 'flat'
+        ? 'flat (sem subpastas)'
+        : config.folderStructure === 'year'
+          ? 'por ano (ex: 2026/)'
+          : 'por semestre (ex: 2026-S1/)';
+
       console.log(chalk.blue('\n◆ Configuração atual\n'));
-      console.log(`  Obsidian   ${config.obsidianPath}`);
+      console.log(`  Backend    ${chalk.cyan(config.storageBackend)}`);
+      console.log(`  Pastas     ${folderInfo}`);
+      if (config.storageBackend === 'obsidian') {
+        console.log(`  Obsidian   ${config.obsidianPath}`);
+      }
       console.log(`  GitHub     https://github.com/${config.githubOwner}/${config.githubRepo}`);
       console.log(`  Token GH   ${config.githubToken ? chalk.green('✓ configurado') : chalk.red('✗ não configurado')}`);
       console.log(`  Jira URL   ${config.jiraBaseUrl || chalk.gray('não configurado')}`);
       console.log(`  Jira Email ${config.jiraEmail || chalk.gray('não configurado')}`);
       console.log(`  Jira Token ${config.jiraToken ? chalk.green('✓ configurado') : chalk.red('✗ não configurado')}`);
+      console.log(`  Google ID  ${config.googleClientId ? chalk.green('✓ configurado') : chalk.gray('não configurado')}`);
+      console.log(`  Google Tk  ${config.googleRefreshToken ? chalk.green('✓ autorizado') : chalk.red('✗ não autorizado')}`);
       console.log(chalk.gray(`\n  Arquivo: ${getConfigPath()}\n`));
       return;
     }
 
     const updates = {};
+    if (opts.storage) {
+      if (!['obsidian', 'googledocs'].includes(opts.storage)) {
+        console.error(chalk.red('✗ --storage deve ser "obsidian" ou "googledocs"'));
+        process.exit(1);
+      }
+      updates.storageBackend = opts.storage;
+    }
+    if (opts.folderStructure) {
+      if (!['flat', 'semester', 'year'].includes(opts.folderStructure)) {
+        console.error(chalk.red('✗ --folder-structure deve ser "flat", "semester" ou "year"'));
+        process.exit(1);
+      }
+      updates.folderStructure = opts.folderStructure;
+    }
     if (opts.token) updates.githubToken = opts.token;
     if (opts.owner) updates.githubOwner = opts.owner;
     if (opts.repo) updates.githubRepo = opts.repo;
@@ -170,6 +233,8 @@ program
     if (opts.jiraUrl) updates.jiraBaseUrl = opts.jiraUrl;
     if (opts.jiraEmail) updates.jiraEmail = opts.jiraEmail;
     if (opts.jiraToken) updates.jiraToken = opts.jiraToken;
+    if (opts.googleClientId) updates.googleClientId = opts.googleClientId;
+    if (opts.googleClientSecret) updates.googleClientSecret = opts.googleClientSecret;
 
     if (Object.keys(updates).length === 0) {
       program.commands.find(c => c.name() === 'config').help();
@@ -178,35 +243,52 @@ program
 
     saveConfig(updates);
     console.log(chalk.green('✓ Configuração salva.'));
-    if (opts.token) console.log(chalk.gray('  Token GitHub armazenado em ~/.brag/config.json'));
-    if (opts.jiraToken) console.log(chalk.gray('  Token Jira armazenado em ~/.brag/config.json'));
+    if (updates.storageBackend) {
+      console.log(chalk.gray(`  Backend: ${updates.storageBackend}`));
+      if (updates.storageBackend === 'googledocs' && !config.googleRefreshToken) {
+        console.log(chalk.yellow(`\n  ⚠ Google ainda não autorizado. Execute: brag auth google`));
+      }
+    }
+    if (updates.folderStructure) {
+      const desc = updates.folderStructure === 'flat' ? 'sem subpastas'
+        : updates.folderStructure === 'year' ? 'por ano (ex: 2026/)'
+        : 'por semestre (ex: 2026-S1/)';
+      console.log(chalk.gray(`  Pastas: ${desc}`));
+    }
   });
 
 // ─── brag status ─────────────────────────────────────────────────────────────
 program
   .command('status')
-  .description('Mostra os brag documents salvos no Obsidian')
+  .description('Mostra os brag documents salvos')
   .action(async () => {
     const config = loadConfig();
-    const { readdirSync, existsSync } = await import('fs');
+    const docs = listBragDocs(config);
 
-    if (!existsSync(config.obsidianPath)) {
+    if (docs.length === 0) {
       console.log(chalk.yellow('⚠ Nenhum brag document encontrado ainda.'));
-      console.log(chalk.gray(`  Pasta: ${config.obsidianPath}`));
       return;
     }
 
-    const files = readdirSync(config.obsidianPath).filter(f => f.endsWith('.md'));
-    if (files.length === 0) {
-      console.log(chalk.yellow('⚠ Pasta vazia. Faça um commit em uma branch com ticket Jira.'));
-      return;
+    // Group by folder
+    const groups = {};
+    for (const doc of docs) {
+      const key = doc.folder ?? '(raiz)';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(doc);
     }
 
-    console.log(chalk.blue(`\n◆ Brag documents (${files.length})\n`));
-    files.forEach(f => {
-      const ticket = f.replace('.md', '');
-      console.log(`  ${chalk.cyan(ticket)}  ${chalk.gray(config.obsidianPath + '/' + f)}`);
-    });
+    const backendLabel = config.storageBackend === 'googledocs' ? 'Google Docs' : 'Obsidian';
+    console.log(chalk.blue(`\n◆ Brag documents — ${backendLabel} (${docs.length})\n`));
+
+    for (const [folder, entries] of Object.entries(groups).sort()) {
+      if (folder !== '(raiz)') console.log(chalk.gray(`  📁 ${folder}`));
+      for (const doc of entries) {
+        const location = doc.url ?? doc.path;
+        const indent = folder !== '(raiz)' ? '    ' : '  ';
+        console.log(`${indent}${chalk.cyan(doc.ticket)}  ${chalk.gray(location)}`);
+      }
+    }
     console.log();
   });
 

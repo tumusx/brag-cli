@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>brag-cli — Auto brag document generator</title>
-  <meta name="description" content="Automatically generate brag documents from your git commits. Reads Jira tickets, saves to Obsidian, publishes to GitHub." />
+  <meta name="description" content="Automatically generate brag documents from your git commits. Reads Jira tickets, saves to Obsidian or Google Docs, organized by semester or year." />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -420,7 +420,7 @@
 
 <!-- Hero -->
 <div class="hero">
-  <div class="badge">v1.0.0 — now with Jira integration</div>
+  <div class="badge">v1.1.0 — Google Docs + folder organization</div>
 
   <h1>
     Brag documents,<br/>
@@ -429,7 +429,7 @@
 
   <p class="hero-sub">
     Every commit you make is a delivery worth documenting.
-    brag-cli reads your Jira ticket, captures git stats, and writes a structured brag document to Obsidian — automatically.
+    brag-cli reads your Jira ticket, captures git stats, and writes a structured brag document to <strong>Obsidian</strong> or <strong>Google Docs</strong> — organized by semester or year.
   </p>
 
   <div class="hero-actions">
@@ -454,14 +454,14 @@
       <div><span class="t-prompt">$ </span><span class="t-cmd">git checkout -b feature/PAY-421-payment-retry</span></div>
       <div><span class="t-prompt">$ </span><span class="t-cmd">git commit -m "feat: retry payment on timeout"</span></div>
       <div>&nbsp;</div>
-      <div><span class="t-blue">◆ brag</span></div>
+      <div><span class="t-blue">◆ brag</span> <span class="t-dimmer">[obsidian]</span></div>
       <div>  Ticket  <span class="t-green">PAY-421</span> <span class="t-dim">— Add payment retry logic</span></div>
       <div>  Branch  <span class="t-dimmer">feature/PAY-421-payment-retry</span></div>
       <div>  Commit  <span class="t-dimmer">a1b2c3d4</span> feat: retry payment on timeout</div>
       <div>  Stats   <span class="t-green">+112</span> <span class="t-dimmer">adições</span> <span class="t-orange">-18</span> <span class="t-dimmer">remoções · 4 arquivo(s)</span></div>
       <div>  Status  <span class="t-purple">In Progress</span> <span class="t-dimmer">· Story · High</span></div>
       <div>&nbsp;</div>
-      <div><span class="t-green">✓ Salvo no Obsidian</span> <span class="t-dimmer">→ ~/mind/brag/PAY-421.md</span></div>
+      <div><span class="t-green">✓ Salvo em Obsidian</span> <span class="t-dimmer">→ ~/mind/brag/2026-S1/PAY-421.md</span></div>
       <div><span class="t-green">✓ Publicado no GitHub</span> <span class="t-dimmer">→ github.com/tumusx/brag-docs/...</span></div>
     </div>
   </div>
@@ -492,13 +492,18 @@
       </div>
       <div class="step">
         <div class="step-num">4</div>
-        <h3>Obsidian doc is updated</h3>
-        <p>A structured markdown file is created or updated in your vault. One file per ticket, with a new entry for each commit.</p>
+        <h3>Document is saved</h3>
+        <p>One file per ticket, prepended with each new commit. Saved to <strong>Obsidian</strong> or <strong>Google Docs</strong> — your choice.</p>
       </div>
       <div class="step">
         <div class="step-num">5</div>
+        <h3>Organized by period</h3>
+        <p>Documents land in a <code>2026-S1/</code> semester folder, a <code>2026/</code> year folder, or flat — configured once, applied forever.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
         <h3>Pushed to GitHub</h3>
-        <p>The document is published to a GitHub repo, keeping a versioned, shareable history of your deliveries.</p>
+        <p>Optionally publish Obsidian docs to a GitHub repo for a versioned, shareable history of your deliveries.</p>
       </div>
     </div>
   </div>
@@ -510,14 +515,14 @@
 <section id="integrations">
   <div class="section-inner">
     <div class="section-label">Integrations</div>
-    <h2>Three tools. One workflow.</h2>
-    <p class="section-sub">brag-cli connects the tools you already use.</p>
+    <h2>Your tools. One workflow.</h2>
+    <p class="section-sub">brag-cli connects the tools you already use — pick your storage backend and go.</p>
 
     <div class="integrations">
       <div class="integration">
         <span class="int-icon">⚡</span>
         <h3>Git</h3>
-        <p>Reads commit hash, message, author, diff stats, and changed files. Installs a <code>post-commit</code> hook to automate everything.</p>
+        <p>Reads commit hash, message, author, diff stats, changed files, and repository name. Installs a <code>post-commit</code> hook to automate everything.</p>
         <span class="tag">post-commit hook</span>
       </div>
       <div class="integration">
@@ -529,13 +534,19 @@
       <div class="integration">
         <span class="int-icon">🟣</span>
         <h3>Obsidian</h3>
-        <p>Creates and updates structured markdown files with YAML frontmatter in your vault. Prepends a new entry on each commit.</p>
+        <p>Creates and updates structured markdown files with YAML frontmatter in your vault. Organized in <code>semester/</code> or <code>year/</code> subfolders.</p>
         <span class="tag">YAML frontmatter</span>
+      </div>
+      <div class="integration">
+        <span class="int-icon">📄</span>
+        <h3>Google Docs</h3>
+        <p>Saves documents directly to Google Drive via OAuth2. Creates folders by period, one doc per ticket — accessible from anywhere.</p>
+        <span class="tag">Drive API · Docs API</span>
       </div>
       <div class="integration">
         <span class="int-icon">🐙</span>
         <h3>GitHub</h3>
-        <p>Publishes documents to a GitHub repo via the Contents API. Creates the repo automatically if it doesn't exist.</p>
+        <p>Publishes Obsidian documents to a GitHub repo via the Contents API — a versioned, shareable history of your deliveries.</p>
         <span class="tag">GitHub API v3</span>
       </div>
     </div>
@@ -554,7 +565,7 @@
     <div class="doc-preview">
       <div class="doc-header">
         <span class="doc-header-icon">📄</span>
-        PAY-421.md — Obsidian vault
+        ~/mind/brag/2026-S1/PAY-421.md — Obsidian vault
       </div>
       <div class="doc-body"><span class="md-frontmatter">---
 ticket: PAY-421
@@ -604,7 +615,7 @@ tags: [brag, engenharia, jira]
   <div class="section-inner">
     <div class="section-label">Install</div>
     <h2>Up and running in 2 minutes.</h2>
-    <p class="section-sub">Node.js 18+ required.</p>
+    <p class="section-sub">Node.js 18+ required. No extra dependencies.</p>
 
     <div class="install-box">
       <div>
@@ -613,18 +624,24 @@ tags: [brag, engenharia, jira]
 <span class="c-comment"># Install globally</span>
 <span class="c-cmd">npm install -g brag-cli</span>
 
+<span class="c-comment"># Obsidian backend (default)</span>
+<span class="c-cmd">brag config</span> <span class="c-flag">--obsidian</span> <span class="c-val">~/mind/brag</span>
+
+<span class="c-comment"># OR: Google Docs backend</span>
+<span class="c-cmd">brag config</span> \
+  <span class="c-flag">--google-client-id</span> <span class="c-val">YOUR_ID</span> \
+  <span class="c-flag">--google-client-secret</span> <span class="c-val">YOUR_SECRET</span>
+<span class="c-cmd">brag auth google</span>
+<span class="c-cmd">brag config</span> <span class="c-flag">--storage</span> <span class="c-val">googledocs</span>
+
+<span class="c-comment"># Choose folder structure</span>
+<span class="c-cmd">brag config</span> <span class="c-flag">--folder-structure</span> <span class="c-val">semester</span>
+
 <span class="c-comment"># Configure Jira</span>
 <span class="c-cmd">brag config</span> \
   <span class="c-flag">--jira-url</span> <span class="c-val">https://co.atlassian.net</span> \
   <span class="c-flag">--jira-email</span> <span class="c-val">you@company.com</span> \
   <span class="c-flag">--jira-token</span> <span class="c-val">YOUR_TOKEN</span>
-
-<span class="c-comment"># Configure Obsidian</span>
-<span class="c-cmd">brag config</span> \
-  <span class="c-flag">--obsidian</span> <span class="c-val">~/mind/brag</span>
-
-<span class="c-comment"># Optional: GitHub publishing</span>
-<span class="c-cmd">brag config</span> <span class="c-flag">--token</span> <span class="c-val">GITHUB_TOKEN</span>
         </div>
       </div>
       <div>
@@ -641,7 +658,7 @@ tags: [brag, engenharia, jira]
 <span class="c-cmd">brag log</span>
 <span class="c-cmd">brag log --push</span>
 
-<span class="c-comment"># Check saved docs</span>
+<span class="c-comment"># Check saved docs (grouped by folder)</span>
 <span class="c-cmd">brag status</span>
         </div>
       </div>
