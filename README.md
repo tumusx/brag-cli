@@ -144,8 +144,9 @@ brag push ABC-123
 brag status
 ```
 
-Output groups documents by folder:
+Output groups documents by folder. Examples for each backend and folder structure:
 
+**Obsidian — semester**
 ```
 ◆ Brag documents — Obsidian (4)
 
@@ -154,6 +155,29 @@ Output groups documents by folder:
     ABC-124  ~/mind/brag/2026-S1/ABC-124.md
   📁 2026-S2
     XYZ-10   ~/mind/brag/2026-S2/XYZ-10.md
+    XYZ-11   ~/mind/brag/2026-S2/XYZ-11.md
+```
+
+**Obsidian — quarter**
+```
+◆ Brag documents — Obsidian (3)
+
+  📁 2026-Q1
+    ABC-100  ~/mind/brag/2026-Q1/ABC-100.md
+  📁 2026-Q2
+    ABC-123  ~/mind/brag/2026-Q2/ABC-123.md
+    ABC-124  ~/mind/brag/2026-Q2/ABC-124.md
+```
+
+**Google Docs — quarter**
+```
+◆ Brag documents — Google Docs (3)
+
+  📁 2026-Q1
+    ABC-100  https://docs.google.com/document/d/abc.../edit
+  📁 2026-Q2
+    ABC-123  https://docs.google.com/document/d/def.../edit
+    ABC-124  https://docs.google.com/document/d/ghi.../edit
 ```
 
 ---
