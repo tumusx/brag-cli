@@ -188,11 +188,12 @@ program
     const config = loadConfig();
 
     if (opts.show) {
-      const folderInfo = config.folderStructure === 'flat'
-        ? 'flat (sem subpastas)'
-        : config.folderStructure === 'year'
-          ? 'por ano (ex: 2026/)'
-          : 'por semestre (ex: 2026-S1/)';
+      const folderInfo = {
+        flat:     'flat (sem subpastas)',
+        year:     'por ano (ex: 2026/)',
+        semester: 'por semestre (ex: 2026-S1/)',
+        quarter:  'por quarter (ex: 2026-Q2/)',
+      }[config.folderStructure] ?? config.folderStructure;
 
       console.log(chalk.blue('\n◆ Configuração atual\n'));
       console.log(`  Backend    ${chalk.cyan(config.storageBackend)}`);
@@ -220,8 +221,8 @@ program
       updates.storageBackend = opts.storage;
     }
     if (opts.folderStructure) {
-      if (!['flat', 'semester', 'year'].includes(opts.folderStructure)) {
-        console.error(chalk.red('✗ --folder-structure deve ser "flat", "semester" ou "year"'));
+      if (!['flat', 'semester', 'quarter', 'year'].includes(opts.folderStructure)) {
+        console.error(chalk.red('✗ --folder-structure deve ser "flat", "semester", "quarter" ou "year"'));
         process.exit(1);
       }
       updates.folderStructure = opts.folderStructure;
@@ -250,9 +251,12 @@ program
       }
     }
     if (updates.folderStructure) {
-      const desc = updates.folderStructure === 'flat' ? 'sem subpastas'
-        : updates.folderStructure === 'year' ? 'por ano (ex: 2026/)'
-        : 'por semestre (ex: 2026-S1/)';
+      const desc = {
+        flat:     'sem subpastas',
+        year:     'por ano (ex: 2026/)',
+        semester: 'por semestre (ex: 2026-S1/)',
+        quarter:  'por quarter (ex: 2026-Q2/)',
+      }[updates.folderStructure] ?? updates.folderStructure;
       console.log(chalk.gray(`  Pastas: ${desc}`));
     }
   });
