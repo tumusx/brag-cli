@@ -7,6 +7,7 @@ import { getCurrentBranch, getLastCommit, extractTicket, isGitRepo } from '../li
 import { saveToObsidian } from '../lib/obsidian.js';
 import { publishBragDoc } from '../lib/github.js';
 import { installHook, removeHook } from '../lib/hook.js';
+import { fetchTicket } from '../lib/jira.js';
 
 const program = new Command();
 
@@ -39,13 +40,27 @@ program
 
       const commit = getLastCommit(opts.cwd);
 
+      // Fetch Jira ticket data if configured
+      let jiraTicket = null;
+      if (config.jiraBaseUrl && config.jiraEmail && config.jiraToken) {
+        try {
+          jiraTicket = await fetchTicket(config, ticket);
+        } catch (err) {
+          console.log(chalk.yellow(`⚠ Jira: ${err.message}`));
+        }
+      }
+
       console.log(chalk.blue(`\n◆ brag`));
-      console.log(`  Ticket  ${chalk.cyan(ticket)}`);
+      console.log(`  Ticket  ${chalk.cyan(ticket)}${jiraTicket ? chalk.gray(` — ${jiraTicket.summary}`) : ''}`);
       console.log(`  Branch  ${chalk.gray(branch)}`);
       console.log(`  Commit  ${chalk.gray(commit.short)} ${commit.message}`);
-      console.log(`  Stats   ${chalk.green(`+${commit.stats.insertions}`)} ${chalk.red(`-${commit.stats.deletions}`)} em ${commit.stats.files} arquivo(s)\n`);
+      console.log(`  Stats   ${chalk.green(`+${commit.stats.insertions}`)} ${chalk.red(`-${commit.stats.deletions}`)} em ${commit.stats.files} arquivo(s)`);
+      if (jiraTicket) {
+        console.log(`  Status  ${chalk.magenta(jiraTicket.status)} · ${jiraTicket.type} · ${jiraTicket.priority}`);
+      }
+      console.log();
 
-      const filePath = saveToObsidian(config.obsidianPath, ticket, branch, commit);
+      const filePath = saveToObsidian(config.obsidianPath, ticket, branch, commit, jiraTicket);
       console.log(chalk.green(`✓ Salvo no Obsidian`) + chalk.gray(` → ${filePath}`));
 
       if (opts.push) {
@@ -128,6 +143,9 @@ program
   .option('--owner <owner>', 'GitHub username/org (padrão: tumusx)')
   .option('--repo <repo>', 'Nome do repositório GitHub (padrão: brag-docs)')
   .option('--obsidian <path>', 'Caminho da pasta brag no Obsidian')
+  .option('--jira-url <url>', 'URL base do Jira (ex: https://empresa.atlassian.net)')
+  .option('--jira-email <email>', 'Email da conta Jira')
+  .option('--jira-token <token>', 'Jira API Token')
   .option('--show', 'Mostra a configuração atual')
   .action((opts) => {
     const config = loadConfig();
@@ -136,7 +154,10 @@ program
       console.log(chalk.blue('\n◆ Configuração atual\n'));
       console.log(`  Obsidian   ${config.obsidianPath}`);
       console.log(`  GitHub     https://github.com/${config.githubOwner}/${config.githubRepo}`);
-      console.log(`  Token      ${config.githubToken ? chalk.green('✓ configurado') : chalk.red('✗ não configurado')}`);
+      console.log(`  Token GH   ${config.githubToken ? chalk.green('✓ configurado') : chalk.red('✗ não configurado')}`);
+      console.log(`  Jira URL   ${config.jiraBaseUrl || chalk.gray('não configurado')}`);
+      console.log(`  Jira Email ${config.jiraEmail || chalk.gray('não configurado')}`);
+      console.log(`  Jira Token ${config.jiraToken ? chalk.green('✓ configurado') : chalk.red('✗ não configurado')}`);
       console.log(chalk.gray(`\n  Arquivo: ${getConfigPath()}\n`));
       return;
     }
@@ -146,6 +167,9 @@ program
     if (opts.owner) updates.githubOwner = opts.owner;
     if (opts.repo) updates.githubRepo = opts.repo;
     if (opts.obsidian) updates.obsidianPath = opts.obsidian;
+    if (opts.jiraUrl) updates.jiraBaseUrl = opts.jiraUrl;
+    if (opts.jiraEmail) updates.jiraEmail = opts.jiraEmail;
+    if (opts.jiraToken) updates.jiraToken = opts.jiraToken;
 
     if (Object.keys(updates).length === 0) {
       program.commands.find(c => c.name() === 'config').help();
@@ -155,6 +179,7 @@ program
     saveConfig(updates);
     console.log(chalk.green('✓ Configuração salva.'));
     if (opts.token) console.log(chalk.gray('  Token GitHub armazenado em ~/.brag/config.json'));
+    if (opts.jiraToken) console.log(chalk.gray('  Token Jira armazenado em ~/.brag/config.json'));
   });
 
 // ─── brag status ─────────────────────────────────────────────────────────────
