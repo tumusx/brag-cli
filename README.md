@@ -162,6 +162,8 @@ Output groups documents by folder:
 
 Each ticket gets its own file. New commits are **prepended** — the document accumulates the full delivery history for that ticket.
 
+The **Campo/Valor table appears once** in the document header (Repositório, Ticket, and Jira metadata). Individual commit entries are lean — just the hash, branch, author, stats, and changed files.
+
 ```markdown
 ---
 ticket: ABC-123
@@ -176,18 +178,39 @@ tags: [brag, engenharia, jira]
 
 > Registro automático de entregas de valor por ticket Jira.
 
+## Detalhes
+
+| Campo        | Valor                                    |
+|--------------|------------------------------------------|
+| Repositório  | `payments-service`                       |
+| Ticket       | [ABC-123](https://...)                   |
+| Tipo         | Story · 5 pts                            |
+| Status       | In Progress                              |
+| Prioridade   | High                                     |
+| Assignee     | Murillo Alvares                          |
+| Labels       | `backend`                                |
+
 ## Commits
 
-### `a1b2c3d4` · 2026-04-26 · fix: retry payment on timeout
+### `b2c3d4e5` · 2026-04-27 · fix: handle timeout edge case
 
-| Campo       | Valor                        |
-|-------------|------------------------------|
-| Repositório | `payments-service`           |
-| Branch      | `feature/ABC-123-...`        |
-| Autor       | Murillo Alvares              |
-| Ticket      | [ABC-123](https://...)       |
+`feature/ABC-123-payment-retry` · Murillo · **+22** adições · **-5** remoções · **1** arquivo(s)
 
-**Impacto de código:** **+84** adições · **-12** remoções · **3** arquivo(s)
+**Arquivos alterados:**
+  - `src/payment/retry.js`
+
+---
+
+### `a1b2c3d4` · 2026-04-26 · feat: retry payment on timeout
+
+`feature/ABC-123-payment-retry` · Murillo · **+84** adições · **-12** remoções · **3** arquivo(s)
+
+**Arquivos alterados:**
+  - `src/payment/retry.js`
+  - `src/payment/client.js`
+  - `tests/payment.test.js`
+
+---
 ```
 
 When using **Google Docs**, the same content is written into a Google Doc inside a Drive folder. A local index at `~/.brag/googledocs-index.json` maps each ticket to its document ID.
